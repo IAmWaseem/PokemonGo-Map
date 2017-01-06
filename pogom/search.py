@@ -36,6 +36,7 @@ from pgoapi import PGoApi
 from pgoapi.utilities import f2i
 from pgoapi import utilities as util
 from pgoapi.exceptions import AuthException
+from pgoapi.hash_server import HashServer
 
 from .models import parse_map, GymDetails, parse_gyms, MainWorker, WorkerStatus
 from .fakePogoApi import FakePogoApi
@@ -44,6 +45,7 @@ from .transform import get_new_coords
 import schedulers
 
 from .proxy import get_new_proxy
+
 
 import terminalsize
 
@@ -89,10 +91,13 @@ def switch_status_printer(display_type, current_page, mainlog, loglevel):
         elif command.lower() == 'f':
                 mainlog.handlers[0].setLevel(logging.CRITICAL)
                 display_type[0] = 'failedaccounts'
+        elif command.lower() == 'h':
+                mainlog.handlers[0].setLevel(logging.CRITICAL)
+                display_type[0] = 'hashstatus'
 
 
 # Thread to print out the status of each worker.
-def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_queue, account_queue, account_failures):
+def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_queue, account_queue, account_failures, args, key_scheduler):
     display_type = ["workers"]
     current_page = [1]
     # Grab current log / level.
@@ -199,9 +204,28 @@ def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_
 
             for account in account_failures:
                 status_text.append(status.format(account['account']['username'], time.strftime('%H:%M:%S', time.localtime(account['last_fail_time'])), account['reason']))
+				
+        elif display_type[0] == 'hashstatus':
+            status_text.append('-----------------------------------------')
+            status_text.append('Hash key status:')
+            status_text.append('-----------------------------------------')
+
+            status = '{:20} | {:9} | {:7}'
+            status_text.append(status.format('Key', 'Remaining', 'Maximum'))
+
+            for key in args.hash_key:
+                rm = 'N/A'
+                mx = 'N/A'
+
+                if (key_scheduler):
+                    if (key == key_scheduler.current_key()):
+                        rm = HashServer.status.get('remaining')
+                        mx = HashServer.status.get('maximum')
+					
+                status_text.append(status.format(key, rm, mx))
 
         # Print the status_text for the current screen.
-        status_text.append('Page {}/{}. Page number to switch pages. F to show on hold accounts. <ENTER> alone to switch between status and log view'.format(current_page[0], total_pages))
+        status_text.append('Page {}/{}. Page number to switch pages. F to show on hold accounts. H to show hash status. <ENTER> alone to switch between status and log view'.format(current_page[0], total_pages))
         # Clear the screen.
         os.system('cls' if os.name == 'nt' else 'clear')
         # Print status.
@@ -282,12 +306,16 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
         'type': 'Overseer',
         'scheduler': args.scheduler
     }
+    
+    # Create the hash server key scheduler (only if the keys are passed as a list)
+    if args.hash_key:
+        key_scheduler = schedulers.KeyScheduler(args.hash_key)
 
     if(args.print_status):
         log.info('Starting status printer thread...')
         t = Thread(target=status_printer,
                    name='status_printer',
-                   args=(threadStatus, search_items_queue_array, db_updates_queue, wh_queue, account_queue, account_failures))
+                   args=(threadStatus, search_items_queue_array, db_updates_queue, wh_queue, account_queue, account_failures, args, key_scheduler))
         t.daemon = True
         t.start()
 
@@ -304,10 +332,6 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
                    args=(threadStatus, args.status_name, db_updates_queue))
         t.daemon = True
         t.start()
-    
-    # Create the hash server key scheduler (only if the keys are passed as a list)
-    if args.hash_key:
-        key_scheduler = schedulers.KeyScheduler(args.hash_key).scheduler()
 
     # Create specified number of search_worker_thread.
     log.info('Starting search worker threads...')
@@ -598,7 +622,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
                 api.set_position(*step_location)
 
                 if args.hash_key:
-                    key = key_scheduler.next()
+                    key = key_scheduler.next_key()
                     api.activate_hash_server(key)
                     log.info('Using key {} for this scan.'.format(key))
 

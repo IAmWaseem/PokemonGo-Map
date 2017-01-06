@@ -870,7 +870,12 @@ class SchedulerFactory():
 class KeyScheduler(object):
     def __init__(self, keys):
         self.keys = keys
-        
-    def scheduler(self):
-        cycle = itertools.cycle(self.keys)
-        return cycle
+        self.key_cycle = itertools.cycle(self.keys)
+        self.curr_key = ''
+		
+    def current_key(self):
+        return self.curr_key
+		
+    def next_key(self):
+        self.curr_key = self.key_cycle.next()
+        return self.curr_key
