@@ -204,7 +204,7 @@ def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_
 
             for account in account_failures:
                 status_text.append(status.format(account['account']['username'], time.strftime('%H:%M:%S', time.localtime(account['last_fail_time'])), account['reason']))
-				
+
         elif display_type[0] == 'hashstatus':
             status_text.append('-----------------------------------------')
             status_text.append('Hash key status:')
@@ -221,7 +221,7 @@ def status_printer(threadStatus, search_items_queue_array, db_updates_queue, wh_
                     if (key == key_scheduler.current_key()):
                         rm = HashServer.status.get('remaining')
                         mx = HashServer.status.get('maximum')
-					
+
                 status_text.append(status.format(key, rm, mx))
 
         # Print the status_text for the current screen.
@@ -306,7 +306,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, db_updat
         'type': 'Overseer',
         'scheduler': args.scheduler
     }
-    
+
     # Create the hash server key scheduler (only if the keys are passed as a list)
     if args.hash_key:
         key_scheduler = schedulers.KeyScheduler(args.hash_key)
